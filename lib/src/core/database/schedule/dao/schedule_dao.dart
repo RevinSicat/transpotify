@@ -14,7 +14,8 @@ class ScheduleWithSegments {
   final Schedule schedule;
   final List<ScheduleSegment> segments;
 
-  int get estimatedTotalMinutes => segments.fold(0, (sum, s) => sum + s.estimatedDurationMinutes);
+  int get estimatedTotalMinutes =>
+      segments.fold(0, (sum, s) => sum + s.estimatedDurationMinutes);
 }
 
 class SegmentAverage {
@@ -29,7 +30,8 @@ class SegmentAverage {
   final double? averageMinutes;
   final int sampleCount;
 
-  double get effectiveMinutes => averageMinutes ?? segment.estimatedDurationMinutes.toDouble();
+  double get effectiveMinutes =>
+      averageMinutes ?? segment.estimatedDurationMinutes.toDouble();
 }
 
 @DriftAccessor(tables: [Schedules, ScheduleSegments, TransitSegmentLogs])
@@ -40,8 +42,9 @@ class ScheduleDao extends DatabaseAccessor<AppDatabase>
   // --------------------------------------------------------------------------- Create
 
   Future<int> createScheduleWithSegments(
-      SchedulesCompanion schedule,
-      List<ScheduleSegmentsCompanion> segments) {
+    SchedulesCompanion schedule,
+    List<ScheduleSegmentsCompanion> segments,
+  ) {
     return transaction(() async {
       final scheduleId = await into(schedules).insert(schedule);
       for (var i = 0; i < segments.length; i++) {
@@ -53,6 +56,33 @@ class ScheduleDao extends DatabaseAccessor<AppDatabase>
         );
       }
       return scheduleId;
+    });
+  }
+
+  Future<void> updateScheduleWithSegments(
+    int scheduleId,
+    SchedulesCompanion schedule,
+    List<ScheduleSegmentsCompanion> segments,
+  ) {
+    return transaction(() async {
+      final updated = await (update(
+        schedules,
+      )..where((s) => s.id.equals(scheduleId))).write(schedule);
+      if (updated == 0) {
+        throw StateError('Schedule $scheduleId not found');
+      }
+
+      await (delete(
+        scheduleSegments,
+      )..where((s) => s.scheduleId.equals(scheduleId))).go();
+      for (var i = 0; i < segments.length; i++) {
+        await into(scheduleSegments).insert(
+          segments[i].copyWith(
+            scheduleId: Value(scheduleId),
+            orderIndex: Value(i),
+          ),
+        );
+      }
     });
   }
 
@@ -90,7 +120,9 @@ class ScheduleDao extends DatabaseAccessor<AppDatabase>
     return ScheduleWithSegments(schedule: schedule, segments: segments);
   }
 
-  Stream<List<ScheduleWithSegments>> watchSchedulesWithSegments({bool activeOnly = false,}) {
+  Stream<List<ScheduleWithSegments>> watchSchedulesWithSegments({
+    bool activeOnly = false,
+  }) {
     final query = select(schedules).join([
       leftOuterJoin(
         scheduleSegments,
@@ -114,10 +146,10 @@ class ScheduleDao extends DatabaseAccessor<AppDatabase>
         if (existing == null) {
           grouped[schedule.id] = ScheduleWithSegments(
             schedule: schedule,
-            segments: [if (segment != null) segment],
+            segments: [?segment],
           );
-        } else if (segment != null) {
-          existing.segments.add(segment);
+        } else {
+          existing.segments.addAll([?segment]);
         }
       }
       return grouped.values.toList();
@@ -130,7 +162,8 @@ class ScheduleDao extends DatabaseAccessor<AppDatabase>
     final avgMinutes = transitSegmentLogs.actualDurationMinutes.avg();
     final samples = transitSegmentLogs.id.count();
 
-    final query = select(scheduleSegments).join([
+    final query =
+        select(scheduleSegments).join([
             leftOuterJoin(
               transitSegmentLogs,
               transitSegmentLogs.scheduleSegmentId.equalsExp(
@@ -146,7 +179,8 @@ class ScheduleDao extends DatabaseAccessor<AppDatabase>
           ..orderBy([OrderingTerm.asc(scheduleSegments.orderIndex)]);
 
     final rows = await query.get();
-    return rows.map(
+    return rows
+        .map(
           (row) => SegmentAverage(
             segment: row.readTable(scheduleSegments),
             averageMinutes: row.read(avgMinutes),
