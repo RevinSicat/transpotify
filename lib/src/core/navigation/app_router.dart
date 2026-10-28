@@ -1,65 +1,88 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../pages/home_shell.dart';
-import '../../features/schedule/presentation/pages/schedule_list_page.dart';
-import '../../features/schedule/presentation/pages/schedule_editor_page.dart';
-import '../../features/transit_log/pages/active_commute_page.dart';
+import '../../pages/active_transit_page.dart';
+import '../../pages/home_page.dart';
+import '../../pages/schedule_page.dart';
+import '../../pages/transit_logs_page.dart';
 
-abstract class AppRoutes {
-    static const schedules = '/schedules';
-    static const newSchedule = '/schedules/new';
-    static const commute = '/commute';
-    static const activeCommute = '/commute/active';
-
-    static String editSchedule(int id) => '/schedules/$id/edit';
-    static String commuteDetail(int transitLogId) => '/commute/$transitLogId';
-}
-
-final rootNavigatorKey = GlobalKey<NavigatorState>();
-
-final GoRouter appRouter = GoRouter(
-    navigatorKey: rootNavigatorKey,
-    initialLocation: AppRoutes.schedules,
-    routes: [
-        StatefulShellRoute.indexedStack(
-            builder: (context, state, navigationShell) => HomeShell(navigationShell: navigationShell),
-            branches: [
-                StatefulShellBranch(
-                    routes: [
-                        GoRoute(
-                            path: AppRoutes.schedules,
-                            builder: (context, state) => const ScheduleListPage()
-                        )
-                    ]
-                ),
-                StatefulShellBranch(
-                    routes: [
-                        GoRoute(
-                            path: AppRoutes.commute,
-                            builder: (context, state) => const ActiveCommutePage()
-                        )
-                    ]
-                )
-            ]
+final appRouter = GoRouter(
+  initialLocation: '/',
+  routes: [
+    ShellRoute(
+      builder: (context, state, child) =>
+          _AppNavigationShell(state: state, child: child),
+      routes: [
+        GoRoute(path: '/', builder: (context, state) => const HomePage()),
+        GoRoute(
+          path: '/schedules',
+          builder: (context, state) => const SchedulePage(),
         ),
         GoRoute(
-            path: AppRoutes.newSchedule,
-            parentNavigatorKey: rootNavigatorKey,
-            builder: (context, state) => const ScheduleEditorPage()
+          path: '/active',
+          builder: (context, state) => const ActiveTransitPage(),
         ),
         GoRoute(
-            path: '/schedules/:id/edit',
-            parentNavigatorKey: rootNavigatorKey,
-            builder: (context, state) {
-                final id = int.tryParse(state.pathParameters['id'] ?? '');
-                return ScheduleEditorPage(scheduleId: id);
-            },
+          path: '/logs',
+          builder: (context, state) => const TransitLogsPage(),
         ),
-        GoRoute(
-            path: AppRoutes.activeCommute,
-            parentNavigatorKey: rootNavigatorKey,
-            builder: (context, state) => const ActiveCommutePage()
-        ),
-    ]
+      ],
+    ),
+  ],
 );
+
+class _AppNavigationShell extends StatelessWidget {
+  const _AppNavigationShell({required this.state, required this.child});
+
+  final GoRouterState state;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final path = state.uri.path;
+    final selectedIndex = switch (path) {
+      '/schedules' => 1,
+      '/active' => 2,
+      '/logs' => 3,
+      _ => 0,
+    };
+
+    return Scaffold(
+      body: child,
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: selectedIndex,
+        onDestinationSelected: (index) {
+          final route = switch (index) {
+            1 => '/schedules',
+            2 => '/active',
+            3 => '/logs',
+            _ => '/',
+          };
+          if (route != path) context.go(route);
+        },
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.event_note_outlined),
+            selectedIcon: Icon(Icons.event_note),
+            label: 'Schedules',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.directions_transit_outlined),
+            selectedIcon: Icon(Icons.directions_transit),
+            label: 'Active',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.history_outlined),
+            selectedIcon: Icon(Icons.history),
+            label: 'Logs',
+          ),
+        ],
+      ),
+    );
+  }
+}
