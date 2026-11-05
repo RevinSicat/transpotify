@@ -57,10 +57,49 @@ void main() {
     expect(find.text('18 mins less than expected time'), findsOneWidget);
     expect(find.text('8:00 AM  →  9:00 AM'), findsOneWidget);
     expect(find.text('Mn'), findsOneWidget);
+    expect(find.text('Tu'), findsOneWidget);
+    expect(find.text('Wd'), findsOneWidget);
+    expect(find.text('Th'), findsOneWidget);
     expect(find.text('Fr'), findsOneWidget);
+    expect(find.text('Sa'), findsOneWidget);
     expect(find.text('Su'), findsOneWidget);
-    expect(find.text('Tu'), findsNothing);
+    final dayLabelTop = tester.getTopLeft(find.text('Mn')).dy;
+    for (final day in ['Tu', 'Wd', 'Th', 'Fr', 'Sa', 'Su']) {
+      expect(tester.getTopLeft(find.text(day)).dy, dayLabelTop);
+    }
     expect(find.text('Start Commute'), findsOneWidget);
+
+    final theme = Theme.of(tester.element(find.text('Mn')));
+    final scheduledDayBadge = tester.widget<Container>(
+      find
+          .ancestor(
+            of: find.text('Mn'),
+            matching: find.byWidgetPredicate(
+              (widget) =>
+                  widget is Container && widget.decoration is BoxDecoration,
+            ),
+          )
+          .first,
+    );
+    final unscheduledDayBadge = tester.widget<Container>(
+      find
+          .ancestor(
+            of: find.text('Tu'),
+            matching: find.byWidgetPredicate(
+              (widget) =>
+                  widget is Container && widget.decoration is BoxDecoration,
+            ),
+          )
+          .first,
+    );
+    expect(
+      (scheduledDayBadge.decoration! as BoxDecoration).color,
+      theme.colorScheme.primaryContainer,
+    );
+    expect(
+      (unscheduledDayBadge.decoration! as BoxDecoration).color,
+      theme.colorScheme.surfaceContainerHighest,
+    );
 
     final title = tester.widget<Text>(
       find.text('A very long weekday commute schedule title'),
