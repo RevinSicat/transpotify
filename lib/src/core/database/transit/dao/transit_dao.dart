@@ -455,6 +455,16 @@ class TransitDao extends DatabaseAccessor<AppDatabase> with _$TransitDaoMixin {
     });
   }
 
+  /// Permanently deletes a transit log and all its associated segment logs.
+  Future<void> deleteCommuteLog(int transitLogId) {
+    return transaction(() async {
+      await (delete(transitSegmentLogs)
+            ..where((s) => s.transitLogId.equals(transitLogId)))
+          .go();
+      await (delete(transitLogs)..where((l) => l.id.equals(transitLogId))).go();
+    });
+  }
+
   // --------------------------------------------------------------------------- Helpers
 
   /// Whole minutes between two instants, rounded, never negative.
