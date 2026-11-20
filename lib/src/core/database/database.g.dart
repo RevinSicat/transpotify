@@ -2360,10 +2360,11 @@ class $$SchedulesTableTableManager
                   getPrefetchedDataCallback: (items) async {
                     return [
                       if (scheduleSegmentsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           Schedule,
                           $SchedulesTable,
-                          ScheduleSegment
+                          ScheduleSegment,
+                          $ScheduleSegmentsTable
                         >(
                           currentTable: table,
                           referencedTable: $$SchedulesTableReferences
@@ -2374,17 +2375,16 @@ class $$SchedulesTableTableManager
                                 table,
                                 p0,
                               ).scheduleSegmentsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.scheduleId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'schedule_id',
                           typedResults: items,
                         ),
                       if (transitLogsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           Schedule,
                           $SchedulesTable,
-                          TransitLog
+                          TransitLog,
+                          $TransitLogsTable
                         >(
                           currentTable: table,
                           referencedTable: $$SchedulesTableReferences
@@ -2395,10 +2395,8 @@ class $$SchedulesTableTableManager
                                 table,
                                 p0,
                               ).transitLogsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.scheduleId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'schedule_id',
                           typedResults: items,
                         ),
                     ];
@@ -2820,10 +2818,11 @@ class $$ScheduleSegmentsTableTableManager
                   getPrefetchedDataCallback: (items) async {
                     return [
                       if (transitSegmentLogsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           ScheduleSegment,
                           $ScheduleSegmentsTable,
-                          TransitSegmentLog
+                          TransitSegmentLog,
+                          $TransitSegmentLogsTable
                         >(
                           currentTable: table,
                           referencedTable: $$ScheduleSegmentsTableReferences
@@ -2834,10 +2833,8 @@ class $$ScheduleSegmentsTableTableManager
                                 table,
                                 p0,
                               ).transitSegmentLogsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.scheduleSegmentId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'schedule_segment_id',
                           typedResults: items,
                         ),
                     ];
@@ -3247,10 +3244,11 @@ class $$TransitLogsTableTableManager
                   getPrefetchedDataCallback: (items) async {
                     return [
                       if (transitSegmentLogsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           TransitLog,
                           $TransitLogsTable,
-                          TransitSegmentLog
+                          TransitSegmentLog,
+                          $TransitSegmentLogsTable
                         >(
                           currentTable: table,
                           referencedTable: $$TransitLogsTableReferences
@@ -3261,10 +3259,8 @@ class $$TransitLogsTableTableManager
                                 table,
                                 p0,
                               ).transitSegmentLogsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.transitLogId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'transit_log_id',
                           typedResults: items,
                         ),
                     ];

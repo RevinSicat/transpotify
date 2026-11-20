@@ -233,6 +233,166 @@ class TransitDao extends DatabaseAccessor<AppDatabase> with _$TransitDaoMixin {
     });
   }
 
+  Future<void> updateCommuteStartedAt(
+      int transitLogId,
+      DateTime startedAt
+  ) {
+    return transaction(() async {
+      final log = await (select(transitLogs)
+            ..where((l) => l.id.equals(transitLogId)))
+          .getSingleOrNull();
+      if (log == null) {
+        throw InvalidTransitionException('Commute $transitLogId not found');
+      }
+
+      if (log.endedAt != null && startedAt.isAfter(log.endedAt!)) {
+        throw const InvalidTransitionException(
+          'Start time cannot be after end time'
+        );
+      }
+
+      final totalMinutes = log.endedAt != null
+          ? _minutesBetween(startedAt, log.endedAt!)
+          : log.totalDurationMinutes;
+
+      await (update(transitLogs)..where((l) => l.id.equals(transitLogId))).write(
+        TransitLogsCompanion(
+          startedAt: Value(startedAt),
+          totalDurationMinutes: Value(totalMinutes)
+        )
+      );
+    });
+  }
+
+  // Extras beyond the spec, needed so a missed tap can't trap the user:
+  Future<void> undoBoardSegment(int segmentLogId) {
+    return transaction(() async {
+      final segment = await _requireSegment(segmentLogId);
+      await _requireActiveLog(segment.transitLogId);
+      _requireStatus(segment, SegmentLogStatus.inTransit, 'undo board');
+
+      await _updateSegment(
+        segmentLogId,
+        const TransitSegmentLogsCompanion(
+          boardedAt: Value(null),
+          status: Value(SegmentLogStatus.pending)
+        )
+      );
+    });
+  }
+
+  Future<void> resetSegment(int segmentLogId) {
+    return transaction(() async {
+      final segment = await _requireSegment(segmentLogId);
+      await _requireActiveLog(segment.transitLogId);
+
+      await _updateSegment(
+        segmentLogId,
+        const TransitSegmentLogsCompanion(
+          boardedAt: Value(null),
+          alightedAt: Value(null),
+          actualDurationMinutes: Value(null),
+          status: Value(SegmentLogStatus.pending)
+        )
+      );
+    });
+  }
+
+  Future<void> resetCommute(int transitLogId) {
+    return transaction(() async {
+      await _requireActiveLog(transitLogId);
+
+      await (update(transitSegmentLogs)
+            ..where((s) => s.transitLogId.equals(transitLogId)))
+          .write(
+        const TransitSegmentLogsCompanion(
+          boardedAt: Value(null),
+          alightedAt: Value(null),
+          actualDurationMinutes: Value(null),
+          status: Value(SegmentLogStatus.pending)
+        )
+      );
+
+      await (update(transitLogs)..where((l) => l.id.equals(transitLogId))).write(
+        const TransitLogsCompanion(
+          status: Value(TransitLogStatus.active),
+          endedAt: Value(null),
+          totalDurationMinutes: Value(null)
+        )
+      );
+    });
+  }
+
+  Future<void> updateSegmentTimestamps(
+    int segmentLogId, {
+    DateTime? boardedAt,
+    DateTime? alightedAt,
+  }) {
+    return transaction(() async {
+      final segment = await _requireSegment(segmentLogId);
+      final log = await (select(transitLogs)
+            ..where((l) => l.id.equals(segment.transitLogId)))
+          .getSingleOrNull();
+      if (log == null) {
+        throw InvalidTransitionException('Commute ${segment.transitLogId} not found');
+      }
+
+      final newBoardedAt = boardedAt ?? segment.boardedAt;
+      final newAlightedAt = alightedAt ?? segment.alightedAt;
+
+      if (newBoardedAt != null &&
+          newAlightedAt != null &&
+          newAlightedAt.isBefore(newBoardedAt)) {
+        throw const InvalidTransitionException(
+          'Alight time cannot be before board time'
+        );
+      }
+
+      final durationMinutes = (newBoardedAt != null && newAlightedAt != null)
+          ? _minutesBetween(newBoardedAt, newAlightedAt)
+          : null;
+
+      await _updateSegment(
+        segmentLogId,
+        TransitSegmentLogsCompanion(
+          boardedAt: Value(newBoardedAt),
+          alightedAt: Value(newAlightedAt),
+          actualDurationMinutes: Value(durationMinutes)
+        )
+      );
+
+      if (log.status == TransitLogStatus.completed) {
+        final siblings = await getSegmentLogsForLog(log.id);
+        final firstBoarded = siblings
+            .map((s) => s.id == segmentLogId ? newBoardedAt : s.boardedAt)
+            .whereType<DateTime>()
+            .fold<DateTime?>(
+              null,
+              (min, d) => min == null || d.isBefore(min) ? d : min
+            );
+        final lastAlighted = siblings
+            .map((s) => s.id == segmentLogId ? newAlightedAt : s.alightedAt)
+            .whereType<DateTime>()
+            .fold<DateTime?>(
+              null,
+              (max, d) => max == null || d.isAfter(max) ? d : max
+            );
+
+        final logStart = firstBoarded ?? log.startedAt;
+        final logEnd = lastAlighted ?? log.endedAt ?? DateTime.now();
+        final totalMinutes = _minutesBetween(logStart, logEnd);
+
+        await (update(transitLogs)..where((l) => l.id.equals(log.id))).write(
+          TransitLogsCompanion(
+            startedAt: Value(logStart),
+            endedAt: Value(logEnd),
+            totalDurationMinutes: Value(totalMinutes)
+          )
+        );
+      }
+    });
+  }
+
   /// pending -> skipped, for legs you didn't take today. Skipped segments are
   /// ignored by the averages.
   Future<void> skipSegment(int segmentLogId) {

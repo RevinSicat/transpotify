@@ -35,9 +35,9 @@ final segmentAveragesProvider =
           ref.watch(scheduleDaoProvider).getSegmentAverages(scheduleId),
     );
 
-final scheduleByIdProvider = FutureProvider.family<Schedule?, int>(
+final scheduleByIdProvider = StreamProvider.family<Schedule?, int>(
   (ref, scheduleId) =>
-      ref.watch(scheduleDaoProvider).getScheduleById(scheduleId),
+      ref.watch(scheduleDaoProvider).watchScheduleById(scheduleId),
 );
 
 final scheduleControllerProvider =

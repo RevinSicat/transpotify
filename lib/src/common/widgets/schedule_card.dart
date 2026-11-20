@@ -159,7 +159,7 @@ class ScheduleCard extends StatelessWidget {
 
 // Schedule Status Badge ==========================================================================
 class ScheduleStatusBadge extends StatelessWidget {
-  const ScheduleStatusBadge({required this.isActive});
+  const ScheduleStatusBadge({required this.isActive, super.key});
 
   final bool isActive;
 
@@ -190,7 +190,7 @@ class ScheduleStatusBadge extends StatelessWidget {
 
 // Commute Summary ================================================================================
 class CommuteSummary extends StatelessWidget {
-  const CommuteSummary({required this.variance});
+  const CommuteSummary({required this.variance, super.key});
 
   final DurationVariance variance;
 
@@ -248,7 +248,7 @@ class CommuteSummary extends StatelessWidget {
 
 // Day Badge ======================================================================================
 class DayBadge extends StatelessWidget {
-  const DayBadge({required this.label, required this.isScheduled});
+  const DayBadge({required this.label, required this.isScheduled, super.key});
 
   final String label;
   final bool isScheduled;
