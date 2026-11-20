@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/database/database.dart';
@@ -68,3 +70,48 @@ final transitHistoryProvider = FutureProvider<List<TransitHistoryEntry>>((
     }),
   );
 });
+
+final transitHistoryControllerProvider = AsyncNotifierProvider<TransitHistoryController, void>(
+  TransitHistoryController.new,
+);
+
+class TransitHistoryController extends AsyncNotifier<void> {
+  @override
+  FutureOr<void> build() {}
+
+  Future<void> updateCommuteStartedAt(
+    int transitLogId,
+    DateTime startedAt,
+  ) async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() async {
+      await ref.read(transitDaoProvider).updateCommuteStartedAt(
+            transitLogId,
+            startedAt
+          );
+      ref.invalidate(transitHistoryProvider);
+    });
+    if (state.hasError) {
+      Error.throwWithStackTrace(state.error!, state.stackTrace!);
+    }
+  }
+
+  Future<void> updateSegmentTimestamps(
+    int segmentLogId, {
+    DateTime? boardedAt,
+    DateTime? alightedAt
+  }) async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() async {
+      await ref.read(transitDaoProvider).updateSegmentTimestamps(
+            segmentLogId,
+            boardedAt: boardedAt,
+            alightedAt: alightedAt
+          );
+      ref.invalidate(transitHistoryProvider);
+    });
+    if (state.hasError) {
+      Error.throwWithStackTrace(state.error!, state.stackTrace!);
+    }
+  }
+}

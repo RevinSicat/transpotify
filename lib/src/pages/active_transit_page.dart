@@ -9,6 +9,9 @@ import '../features/schedule/controllers/schedule_controller.dart';
 import '../features/transit/controllers/active_transit_controller.dart';
 import '../features/transit/controllers/transit_history_provider.dart';
 
+enum ActiveCommuteMenuAction { adjustStartTime, reset, cancel }
+enum SegmentAction { undoBoard, resetSegment, editBoardTime, editAlightTime }
+
 class ActiveTransitPage extends ConsumerWidget {
   const ActiveTransitPage({super.key});
 
@@ -19,18 +22,57 @@ class ActiveTransitPage extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Active commute'),
         actions: [
-          activeTransit.asData?.value == null
-              ? const SizedBox.shrink()
-              : IconButton(
-                  tooltip: 'Cancel commute',
-                  onPressed: () => _cancelCommute(
-                    context,
-                    ref,
-                    activeTransit.asData!.value!.log.id,
-                  ),
-                  icon: const Icon(Icons.close),
+          if (activeTransit.asData?.value != null)
+            PopupMenuButton<ActiveCommuteMenuAction>(
+              tooltip: 'Commute options',
+              icon: const Icon(Icons.more_vert),
+              onSelected: (action) {
+                final log = activeTransit.asData!.value!.log;
+                switch (action) {
+                  case ActiveCommuteMenuAction.adjustStartTime:
+                    _adjustCommuteStartTime(
+                      context,
+                      ref,
+                      log.id,
+                      log.startedAt
+                    );
+                    break;
+                  case ActiveCommuteMenuAction.reset:
+                    _resetCommute(context, ref, log.id);
+                    break;
+                  case ActiveCommuteMenuAction.cancel:
+                    _cancelCommute(context, ref, log.id);
+                    break;
+                }
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: ActiveCommuteMenuAction.adjustStartTime,
+                  child: ListTile(
+                    leading: Icon(Icons.access_time),
+                    title: Text('Adjust start time'),
+                    contentPadding: EdgeInsets.zero
+                  )
                 ),
-        ],
+                const PopupMenuItem(
+                  value: ActiveCommuteMenuAction.reset,
+                  child: ListTile(
+                    leading: Icon(Icons.restart_alt),
+                    title: Text('Reset commute'),
+                    contentPadding: EdgeInsets.zero
+                  )
+                ),
+                const PopupMenuItem(
+                  value: ActiveCommuteMenuAction.cancel,
+                  child: ListTile(
+                    leading: Icon(Icons.close),
+                    title: Text('Cancel commute'),
+                    contentPadding: EdgeInsets.zero
+                  )
+                )
+              ]
+            )
+        ]
       ),
       body: activeTransit.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -53,6 +95,7 @@ class ActiveTransitPage extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
             children: [
               _CommuteHeader(
+                transitLogId: transit.log.id,
                 scheduleId: transit.log.scheduleId,
                 startedAt: transit.log.startedAt,
                 segments: transit.segments.length,
@@ -115,6 +158,20 @@ class ActiveTransitPage extends ConsumerWidget {
                                 : 'Board ${_labelMode(current.transportMode)}',
                           ),
                         ),
+                        if (isAlighting) ...[
+                          const SizedBox(height: 8),
+                          TextButton.icon(
+                            onPressed: () => _runAction(
+                              context,
+                              ref,
+                              () => ref.read(
+                                  activeTransitControllerProvider.notifier
+                              ).undoBoardSegment(current.id)
+                            ),
+                            icon: const Icon(Icons.undo),
+                            label: const Text('Undo board')
+                          )
+                        ],
                         if (isBoarding) ...[
                           const SizedBox(height: 8),
                           TextButton(
@@ -225,6 +282,39 @@ class ActiveTransitPage extends ConsumerWidget {
     }
   }
 
+  Future<void> _resetCommute(
+    BuildContext context,
+    WidgetRef ref,
+    int transitLogId,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reset this commute?'),
+        content: const Text(
+          'All segment timestamps and progress will be reset to unstarted. The commute remains active.'
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep progress')
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Reset commute')
+          )
+        ]
+      )
+    );
+    if (confirmed != true || !context.mounted) return;
+    await _runAction(
+      context,
+      ref,
+      () => ref.read(activeTransitControllerProvider.notifier)
+        .resetCommute(transitLogId)
+    );
+  }
+
   Future<void> _cancelCommute(
     BuildContext context,
     WidgetRef ref,
@@ -262,11 +352,13 @@ class ActiveTransitPage extends ConsumerWidget {
 
 class _CommuteHeader extends ConsumerWidget {
   const _CommuteHeader({
+    required this.transitLogId,
     required this.scheduleId,
     required this.startedAt,
     required this.segments,
   });
 
+  final int transitLogId;
   final int? scheduleId;
   final DateTime startedAt;
   final int segments;
@@ -289,24 +381,97 @@ class _CommuteHeader extends ConsumerWidget {
               ?.copyWith(fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 4),
-        Text(
-          'Started ${_formatTime(startedAt)} · $segments '
-          '${segments == 1 ? 'segment' : 'segments'}',
-          style: Theme.of(context).textTheme.bodyMedium,
-        ),
-      ],
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 6,
+          children: [
+            InkWell(
+              onTap: () => _adjustCommuteStartTime(
+                context,
+                ref,
+                transitLogId,
+                startedAt
+              ),
+              borderRadius: BorderRadius.circular(4),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Started ${_formatTime(startedAt)}',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
+                        decoration: TextDecoration.underline,
+                        fontWeight: FontWeight.w600
+                      )
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.edit,
+                      size: 14,
+                      color: Theme.of(context).colorScheme.primary
+                    )
+                  ]
+                )
+              )
+            ),
+            Text(
+              '· $segments ${segments == 1 ? 'segment' : 'segments'}',
+              style: Theme.of(context).textTheme.bodyMedium
+            )
+          ]
+        )
+      ]
     );
   }
 }
 
-class _TimelineRow extends StatelessWidget {
-  const _TimelineRow({required this.segment, required this.isLast});
+Future<void> _adjustCommuteStartTime(
+  BuildContext context,
+  WidgetRef ref,
+  int transitLogId,
+  DateTime currentStartedAt
+) async {
+  final initialTime = TimeOfDay.fromDateTime(currentStartedAt);
+  final picked = await showTimePicker(
+    context: context,
+    initialTime: initialTime,
+  );
+  if (picked == null || !context.mounted) return;
+
+  final newDateTime = DateTime(
+    currentStartedAt.year,
+    currentStartedAt.month,
+    currentStartedAt.day,
+    picked.hour,
+    picked.minute
+  );
+
+  try {
+    await ref
+        .read(activeTransitControllerProvider.notifier)
+        .updateCommuteStartedAt(transitLogId, newDateTime);
+  } catch (error) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.toString()))
+      );
+    }
+  }
+}
+
+class _TimelineRow extends ConsumerWidget {
+  const _TimelineRow({
+    required this.segment,
+    required this.isLast
+  });
 
   final TransitSegmentLog segment;
   final bool isLast;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final status = segment.status;
     final mode = segment.transportMode;
     final name = segment.segmentName;
@@ -314,6 +479,7 @@ class _TimelineRow extends StatelessWidget {
     final alightedAt = segment.alightedAt;
     final isDone = status == SegmentLogStatus.completed;
     final isSkipped = status == SegmentLogStatus.skipped;
+    final isInTransit = status == SegmentLogStatus.inTransit;
     final colorScheme = Theme.of(context).colorScheme;
     final modeColor = AppColors.transportModeColor(mode);
     final statusText = switch (status) {
@@ -322,6 +488,8 @@ class _TimelineRow extends StatelessWidget {
       SegmentLogStatus.skipped => 'Skipped',
       _ => 'Upcoming',
     };
+
+    final hasMenu = isInTransit || isDone || isSkipped;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -369,28 +537,256 @@ class _TimelineRow extends StatelessWidget {
                         ?.copyWith(fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 3),
-                  Text(
-                    [
-                      statusText,
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: [
+                      Text(
+                        statusText,
+                        style: Theme.of(context).textTheme.labelSmall
+                            ?.copyWith(color: colorScheme.onSurfaceVariant)
+                      ),
                       if (boardedAt != null)
-                        'Boarded ${_formatTime(boardedAt)}',
+                        InkWell(
+                          onTap: () => _adjustTimestamp(
+                            context: context,
+                            ref: ref,
+                            segment: segment,
+                            isBoard: true
+                          ),
+                          borderRadius: BorderRadius.circular(4),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 2,
+                              vertical: 1
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Boarded ${_formatTime(boardedAt)}',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .labelSmall
+                                      ?.copyWith(
+                                        color: colorScheme.primary,
+                                        decoration: TextDecoration.underline
+                                      )
+                                ),
+                                const SizedBox(width: 2),
+                                Icon(
+                                  Icons.edit,
+                                  size: 11,
+                                  color: colorScheme.primary
+                                )
+                              ]
+                            )
+                          )
+                        ),
                       if (alightedAt != null)
-                        'Alighted ${_formatTime(alightedAt)}',
+                        InkWell(
+                          onTap: () => _adjustTimestamp(
+                            context: context,
+                            ref: ref,
+                            segment: segment,
+                            isBoard: false
+                          ),
+                          borderRadius: BorderRadius.circular(4),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 2,
+                              vertical: 1
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Alighted ${_formatTime(alightedAt)}',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .labelSmall
+                                      ?.copyWith(
+                                        color: colorScheme.primary,
+                                        decoration: TextDecoration.underline
+                                      )
+                                ),
+                                const SizedBox(width: 2),
+                                Icon(
+                                  Icons.edit,
+                                  size: 11,
+                                  color: colorScheme.primary
+                                )
+                              ]
+                            )
+                          )
+                        ),
                       if (segment.actualDurationMinutes != null)
-                        '${segment.actualDurationMinutes} min',
-                    ].join(' · '),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelSmall
-                        ?.copyWith(color: colorScheme.onSurfaceVariant),
-                  ),
-                ],
-              ),
-            ),
+                        Text(
+                          '${segment.actualDurationMinutes} min',
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(color: colorScheme.onSurfaceVariant)
+                        )
+                    ]
+                  )
+                ]
+              )
+            )
           ),
-        ],
-      ),
+          if (hasMenu)
+            PopupMenuButton<SegmentAction>(
+              icon: const Icon(Icons.more_horiz, size: 20),
+              tooltip: 'Segment options',
+              padding: EdgeInsets.zero,
+              onSelected: (action) {
+                switch (action) {
+                  case SegmentAction.undoBoard:
+                    ref
+                        .read(activeTransitControllerProvider.notifier)
+                        .undoBoardSegment(segment.id);
+                    break;
+                  case SegmentAction.resetSegment:
+                    _confirmResetSegment(context, ref, segment.id);
+                    break;
+                  case SegmentAction.editBoardTime:
+                    _adjustTimestamp(
+                      context: context,
+                      ref: ref,
+                      segment: segment,
+                      isBoard: true
+                    );
+                    break;
+                  case SegmentAction.editAlightTime:
+                    _adjustTimestamp(
+                      context: context,
+                      ref: ref,
+                      segment: segment,
+                      isBoard: false
+                    );
+                    break;
+                }
+              },
+              itemBuilder: (context) => [
+                if (isInTransit)
+                  const PopupMenuItem(
+                    value: SegmentAction.undoBoard,
+                    child: ListTile(
+                      leading: Icon(Icons.undo),
+                      title: Text('Undo board'),
+                      contentPadding: EdgeInsets.zero
+                    )
+                  ),
+                if (isDone || isSkipped)
+                  const PopupMenuItem(
+                    value: SegmentAction.resetSegment,
+                    child: ListTile(
+                      leading: Icon(Icons.restart_alt),
+                      title: Text('Reset segment'),
+                      contentPadding: EdgeInsets.zero
+                    )
+                  ),
+                if (boardedAt != null)
+                  const PopupMenuItem(
+                    value: SegmentAction.editBoardTime,
+                    child: ListTile(
+                      leading: Icon(Icons.access_time),
+                      title: Text('Adjust board time'),
+                      contentPadding: EdgeInsets.zero
+                    )
+                  ),
+                if (alightedAt != null)
+                  const PopupMenuItem(
+                    value: SegmentAction.editAlightTime,
+                    child: ListTile(
+                      leading: Icon(Icons.access_time_filled),
+                      title: Text('Adjust alight time'),
+                      contentPadding: EdgeInsets.zero
+                    )
+                  )
+              ]
+            )
+        ]
+      )
     );
+  }
+
+  Future<void> _adjustTimestamp({
+    required BuildContext context,
+    required WidgetRef ref,
+    required TransitSegmentLog segment,
+    required bool isBoard
+  }) async {
+    final current = isBoard ? segment.boardedAt : segment.alightedAt;
+    final initialDateTime = current ?? DateTime.now();
+    final initialTime = TimeOfDay.fromDateTime(initialDateTime);
+
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: initialTime
+    );
+    if (picked == null || !context.mounted) return;
+
+    final newDateTime = DateTime(
+      initialDateTime.year,
+      initialDateTime.month,
+      initialDateTime.day,
+      picked.hour,
+      picked.minute
+    );
+
+    try {
+      await ref
+          .read(activeTransitControllerProvider.notifier)
+          .updateSegmentTimestamps(
+            segment.id,
+            boardedAt: isBoard ? newDateTime : null,
+            alightedAt: !isBoard ? newDateTime : null
+          );
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.toString()))
+        );
+      }
+    }
+  }
+
+  Future<void> _confirmResetSegment(
+    BuildContext context,
+    WidgetRef ref,
+    int segmentId
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reset segment?'),
+        content: const Text(
+          'This will clear this segment\'s progress and timestamps.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel')
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Reset')
+          )
+        ]
+      )
+    );
+    if (confirmed != true || !context.mounted) return;
+    try {
+      await ref
+          .read(activeTransitControllerProvider.notifier)
+          .resetSegment(segmentId);
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.toString()))
+        );
+      }
+    }
   }
 }
 

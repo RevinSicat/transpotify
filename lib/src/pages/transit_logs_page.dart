@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/database/database.dart';
 import '../features/transit/controllers/transit_history_provider.dart';
 
 class TransitLogsPage extends ConsumerWidget {
@@ -88,13 +89,13 @@ class _DateGroup extends StatelessWidget {
   }
 }
 
-class _CommuteHistoryTile extends StatelessWidget {
+class _CommuteHistoryTile extends ConsumerWidget {
   const _CommuteHistoryTile({required this.entry});
 
   final TransitHistoryEntry entry;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final log = entry.log;
     final statusColor = log.status == 'completed'
         ? Theme.of(context).colorScheme.primary
@@ -109,11 +110,47 @@ class _CommuteHistoryTile extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
-      subtitle: Text(
-        '${_formatTime(log.startedAt)} · ${_labelStatus(log.status)}'
-        '${log.totalDurationMinutes == null ? '' : ' · ${log.totalDurationMinutes} min'}',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
+      subtitle: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          InkWell(
+            onTap: () => _adjustCommuteStartTime(
+              context: context,
+              ref: ref,
+              log: log
+            ),
+            borderRadius: BorderRadius.circular(4),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _formatTime(log.startedAt),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.primary,
+                          decoration: TextDecoration.underline
+                        )
+                  ),
+                  const SizedBox(width: 2),
+                  Icon(
+                    Icons.edit,
+                    size: 11,
+                    color: Theme.of(context).colorScheme.primary
+                  )
+                ]
+              )
+            )
+          ),
+          Flexible(
+            child: Text(
+              ' · ${_labelStatus(log.status)}'
+              '${log.totalDurationMinutes == null ? '' : ' · ${log.totalDurationMinutes} min'}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis
+            )
+          )
+        ]
       ),
       children: entry.segments.isEmpty
           ? const [
@@ -121,25 +158,60 @@ class _CommuteHistoryTile extends StatelessWidget {
                 padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
                 child: Align(
                   alignment: Alignment.centerLeft,
-                  child: Text('No segment details were saved.'),
-                ),
-              ),
+                  child: Text('No segment details were saved.')
+                )
+              )
             ]
           : [
               for (final segment in entry.segments)
-                _HistorySegmentRow(segment: segment),
-            ],
+                _HistorySegmentRow(segment: segment)
+            ]
     );
+  }
+
+  Future<void> _adjustCommuteStartTime({
+    required BuildContext context,
+    required WidgetRef ref,
+    required TransitLog log
+  }) async {
+    final initialDateTime = log.startedAt;
+    final initialTime = TimeOfDay.fromDateTime(initialDateTime);
+
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: initialTime
+    );
+    if (picked == null || !context.mounted) return;
+
+    final newDateTime = DateTime(
+      initialDateTime.year,
+      initialDateTime.month,
+      initialDateTime.day,
+      picked.hour,
+      picked.minute
+    );
+
+    try {
+      await ref
+          .read(transitHistoryControllerProvider.notifier)
+          .updateCommuteStartedAt(log.id, newDateTime);
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.toString()))
+        );
+      }
+    }
   }
 }
 
-class _HistorySegmentRow extends StatelessWidget {
+class _HistorySegmentRow extends ConsumerWidget {
   const _HistorySegmentRow({required this.segment});
 
   final TransitHistorySegment segment;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final log = segment.log;
     final actual = log.actualDurationMinutes;
     final estimate = segment.estimatedDurationMinutes;
@@ -150,15 +222,21 @@ class _HistorySegmentRow extends StatelessWidget {
     final comparison = actual == null || estimate == null
         ? null
         : actual - estimate;
+    final boardedAt = log.boardedAt;
+    final alightedAt = log.alightedAt;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 4, 20, 12),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.circle,
-            size: 9,
-            color: Theme.of(context).colorScheme.primary,
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Icon(
+              Icons.circle,
+              size: 9,
+              color: Theme.of(context).colorScheme.primary
+            )
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -170,17 +248,104 @@ class _HistorySegmentRow extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodyMedium
-                      ?.copyWith(fontWeight: FontWeight.w600),
+                      ?.copyWith(fontWeight: FontWeight.w600)
                 ),
                 const SizedBox(height: 3),
                 Text(
                   '${_labelMode(log.transportMode)} · $duration',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelSmall,
+                  style: Theme.of(context).textTheme.labelSmall
                 ),
-              ],
-            ),
+                if (boardedAt != null || alightedAt != null) ...[
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      if (boardedAt != null)
+                        InkWell(
+                          onTap: () => _adjustTimestamp(
+                            context: context,
+                            ref: ref,
+                            segmentLog: log,
+                            isBoard: true
+                          ),
+                          borderRadius: BorderRadius.circular(4),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 2,
+                              vertical: 1
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Boarded ${_formatTime(boardedAt)}',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .labelSmall
+                                      ?.copyWith(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .primary,
+                                        decoration: TextDecoration.underline
+                                      )
+                                ),
+                                const SizedBox(width: 2),
+                                Icon(
+                                  Icons.edit,
+                                  size: 11,
+                                  color: Theme.of(context).colorScheme.primary
+                                )
+                              ]
+                            )
+                          )
+                        ),
+                      if (alightedAt != null)
+                        InkWell(
+                          onTap: () => _adjustTimestamp(
+                            context: context,
+                            ref: ref,
+                            segmentLog: log,
+                            isBoard: false,
+                          ),
+                          borderRadius: BorderRadius.circular(4),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 2,
+                              vertical: 1
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Alighted ${_formatTime(alightedAt)}',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .labelSmall
+                                      ?.copyWith(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .primary,
+                                        decoration: TextDecoration.underline
+                                      )
+                                ),
+                                const SizedBox(width: 2),
+                                Icon(
+                                  Icons.edit,
+                                  size: 11,
+                                  color: Theme.of(context).colorScheme.primary
+                                )
+                              ]
+                            )
+                          )
+                        )
+                    ]
+                  )
+                ]
+              ]
+            )
           ),
           if (comparison != null)
             Text(
@@ -197,6 +362,47 @@ class _HistorySegmentRow extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _adjustTimestamp({
+    required BuildContext context,
+    required WidgetRef ref,
+    required TransitSegmentLog segmentLog,
+    required bool isBoard
+  }) async {
+    final current = isBoard ? segmentLog.boardedAt : segmentLog.alightedAt;
+    final initialDateTime = current ?? DateTime.now();
+    final initialTime = TimeOfDay.fromDateTime(initialDateTime);
+
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: initialTime
+    );
+    if (picked == null || !context.mounted) return;
+
+    final newDateTime = DateTime(
+      initialDateTime.year,
+      initialDateTime.month,
+      initialDateTime.day,
+      picked.hour,
+      picked.minute
+    );
+
+    try {
+      await ref
+          .read(transitHistoryControllerProvider.notifier)
+          .updateSegmentTimestamps(
+            segmentLog.id,
+            boardedAt: isBoard ? newDateTime : null,
+            alightedAt: !isBoard ? newDateTime : null
+          );
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.toString()))
+        );
+      }
+    }
   }
 }
 

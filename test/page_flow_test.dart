@@ -107,4 +107,209 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));
   });
+
+  testWidgets('active commute undo board and reset commute page flow', (tester) async {
+    appRouter.go('/');
+    await database.scheduleDao.createScheduleWithSegments(
+      SchedulesCompanion.insert(
+        name: 'Reset flow commute',
+        targetStartTime: '08:00',
+        targetArrivalTime: '08:30',
+        daysOfWeek: const [1],
+      ),
+      [
+        ScheduleSegmentsCompanion.insert(
+          scheduleId: 0,
+          name: 'First leg',
+          transportMode: 'walk',
+          orderIndex: 0,
+          estimatedDurationMinutes: 5,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [appDatabaseProvider.overrideWithValue(database)],
+        child: MaterialApp.router(routerConfig: appRouter),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Start Commute'), findsOneWidget);
+    await tester.tap(find.text('Start Commute'));
+    await tester.pumpAndSettle();
+
+    // 1. Board and Undo Board
+    expect(find.text('Board Walk'), findsOneWidget);
+    await tester.tap(find.text('Board Walk'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Alight Walk'), findsOneWidget);
+    expect(find.text('Undo board'), findsOneWidget);
+
+    await tester.tap(find.text('Undo board'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Board Walk'), findsOneWidget);
+    expect(find.text('Undo board'), findsNothing);
+
+    // 2. Board, Alight, then Reset Commute via overflow menu
+    await tester.tap(find.text('Board Walk'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Alight Walk'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('All segments finished'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Commute options'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Reset commute'), findsOneWidget);
+    await tester.tap(find.text('Reset commute'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Reset this commute?'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Reset commute'));
+    await tester.pumpAndSettle();
+
+    // Commute is back to initial active state with 'Board Walk'
+    expect(find.text('Board Walk'), findsOneWidget);
+    var active = await database.transitDao.getActiveLogWithSegments();
+    expect(active, isNotNull);
+    expect(active!.segments.single.status, 'pending');
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('manual timestamp adjustment in commute history page flow', (tester) async {
+    appRouter.go('/');
+    final scheduleId = await database.scheduleDao.createScheduleWithSegments(
+      SchedulesCompanion.insert(
+        name: 'Timestamp test commute',
+        targetStartTime: '08:00',
+        targetArrivalTime: '08:30',
+        daysOfWeek: const [1],
+      ),
+      [
+        ScheduleSegmentsCompanion.insert(
+          scheduleId: 0,
+          name: 'Walk segment',
+          transportMode: 'walk',
+          orderIndex: 0,
+          estimatedDurationMinutes: 10,
+        ),
+      ],
+    );
+
+    final start = DateTime(2026, 1, 1, 8, 0);
+    final logId = await database.transitDao.startCommute(
+      scheduleId: scheduleId,
+      segments: (await database.scheduleDao.getScheduleWithSegments(scheduleId))!.segments,
+      now: start,
+    );
+    final segId = (await database.transitDao.getSegmentLogsForLog(logId)).single.id;
+    await database.transitDao.boardSegment(segId, now: start);
+    await database.transitDao.alightSegment(segId, now: start.add(const Duration(minutes: 10)));
+    await database.transitDao.completeCommute(logId, now: start.add(const Duration(minutes: 10)));
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [appDatabaseProvider.overrideWithValue(database)],
+        child: MaterialApp.router(routerConfig: appRouter),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Navigate to logs
+    appRouter.go('/logs');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Commute history'), findsOneWidget);
+    await tester.tap(find.text('Timestamp test commute'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Walk segment'), findsOneWidget);
+    expect(find.textContaining('Boarded'), findsOneWidget);
+    expect(find.textContaining('Alighted'), findsOneWidget);
+    expect(find.textContaining('Actual 10 min'), findsOneWidget);
+
+    // Tap on Boarded timestamp to open time picker
+    await tester.tap(find.textContaining('Boarded'));
+    await tester.pumpAndSettle();
+
+    // In time picker, tap OK (accepts time)
+    expect(find.text('OK'), findsOneWidget);
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('active commute adjust start time page flow', (tester) async {
+    appRouter.go('/');
+    final scheduleId = await database.scheduleDao.createScheduleWithSegments(
+      SchedulesCompanion.insert(
+        name: 'Adjust start commute',
+        targetStartTime: '08:00',
+        targetArrivalTime: '08:30',
+        daysOfWeek: const [1],
+      ),
+      [
+        ScheduleSegmentsCompanion.insert(
+          scheduleId: 0,
+          name: 'Walk segment',
+          transportMode: 'walk',
+          orderIndex: 0,
+          estimatedDurationMinutes: 10,
+        ),
+      ],
+    );
+
+    final start = DateTime(2026, 1, 1, 8, 0);
+    await database.transitDao.startCommute(
+      scheduleId: scheduleId,
+      segments: (await database.scheduleDao.getScheduleWithSegments(scheduleId))!.segments,
+      now: start,
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [appDatabaseProvider.overrideWithValue(database)],
+        child: MaterialApp.router(routerConfig: appRouter),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    appRouter.go('/active');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Active commute'), findsOneWidget);
+    expect(find.textContaining('Started '), findsOneWidget);
+
+    // 1. Tap on header "Started ..." to open time picker
+    await tester.tap(find.textContaining('Started '));
+    await tester.pumpAndSettle();
+
+    expect(find.text('OK'), findsOneWidget);
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+
+    // 2. Open overflow menu and select "Adjust start time"
+    await tester.tap(find.byTooltip('Commute options'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Adjust start time'), findsOneWidget);
+    await tester.tap(find.text('Adjust start time'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('OK'), findsOneWidget);
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
 }
