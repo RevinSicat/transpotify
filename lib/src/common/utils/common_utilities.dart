@@ -117,7 +117,7 @@ abstract final class CommonUtilities {
     final amount = abs >= 60
         ? '${abs ~/ 60}h ${(abs % 60).toString().padLeft(2, '0')}m'
         : '$abs ${abs == 1 ? 'min' : 'mins'}';
-    return '$amount ${rounded < 0 ? 'less' : 'more'} than expected time';
+    return '$amount ${rounded < 0 ? 'Earlier' : 'Late'}';
   }
 
   /// --- Dynamic Copy ---
