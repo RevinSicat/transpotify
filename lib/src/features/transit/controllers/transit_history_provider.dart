@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/database/database.dart';
 import '../../../core/database/database_providers.dart';
+import '../../schedule/controllers/schedule_controller.dart';
 
 class TransitHistoryEntry {
   const TransitHistoryEntry({
@@ -81,7 +82,7 @@ class TransitHistoryController extends AsyncNotifier<void> {
 
   Future<void> updateCommuteStartedAt(
     int transitLogId,
-    DateTime startedAt,
+    DateTime startedAt
   ) async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
@@ -109,6 +110,19 @@ class TransitHistoryController extends AsyncNotifier<void> {
             alightedAt: alightedAt
           );
       ref.invalidate(transitHistoryProvider);
+    });
+    if (state.hasError) {
+      Error.throwWithStackTrace(state.error!, state.stackTrace!);
+    }
+  }
+
+  Future<void> deleteCommute(int transitLogId) async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() async {
+      await ref.read(transitDaoProvider).deleteCommuteLog(transitLogId);
+      ref.invalidate(transitHistoryProvider);
+      ref.invalidate(scheduleVarianceProvider);
+      ref.invalidate(segmentAveragesProvider);
     });
     if (state.hasError) {
       Error.throwWithStackTrace(state.error!, state.stackTrace!);

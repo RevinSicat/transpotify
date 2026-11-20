@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../common/theme/app_colors.dart';
+import '../common/widgets/status_badge.dart';
 import '../core/database/database.dart';
 import '../core/database/transit/transit_status.dart';
 import '../features/schedule/controllers/schedule_controller.dart';
@@ -30,7 +31,7 @@ class ActiveTransitPage extends ConsumerWidget {
                 final log = activeTransit.asData!.value!.log;
                 switch (action) {
                   case ActiveCommuteMenuAction.adjustStartTime:
-                    _adjustCommuteStartTime(
+                    adjustCommuteStartTime(
                       context,
                       ref,
                       log.id,
@@ -38,10 +39,10 @@ class ActiveTransitPage extends ConsumerWidget {
                     );
                     break;
                   case ActiveCommuteMenuAction.reset:
-                    _resetCommute(context, ref, log.id);
+                    resetCommute(context, ref, log.id);
                     break;
                   case ActiveCommuteMenuAction.cancel:
-                    _cancelCommute(context, ref, log.id);
+                    cancelCommute(context, ref, log.id);
                     break;
                 }
               },
@@ -77,13 +78,13 @@ class ActiveTransitPage extends ConsumerWidget {
       body: activeTransit.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) =>
-            _ErrorState(message: 'Could not load commute: $error'),
+            ErrorState(message: 'Could not load commute: $error'),
         data: (transit) {
-          if (transit == null) return const _NoActiveCommute();
+          if (transit == null) return const NoActiveCommute();
           final pendingOrInTransit = transit.segments.where(
             (segment) =>
                 segment.status == SegmentLogStatus.pending ||
-                segment.status == SegmentLogStatus.inTransit,
+                segment.status == SegmentLogStatus.inTransit
           );
           final current = pendingOrInTransit.isEmpty
               ? null
@@ -94,11 +95,10 @@ class ActiveTransitPage extends ConsumerWidget {
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
             children: [
-              _CommuteHeader(
-                transitLogId: transit.log.id,
+              CommuteHeader(
                 scheduleId: transit.log.scheduleId,
                 startedAt: transit.log.startedAt,
-                segments: transit.segments.length,
+                segments: transit.segments.length
               ),
               const SizedBox(height: 18),
               if (current != null) ...[
@@ -111,7 +111,7 @@ class ActiveTransitPage extends ConsumerWidget {
                       children: [
                         Text(
                           isBoarding ? 'Next segment' : 'Currently in transit',
-                          style: Theme.of(context).textTheme.labelLarge,
+                          style: Theme.of(context).textTheme.labelLarge
                         ),
                         const SizedBox(height: 8),
                         Text(
@@ -119,16 +119,16 @@ class ActiveTransitPage extends ConsumerWidget {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.headlineSmall
-                              ?.copyWith(fontWeight: FontWeight.w700),
+                              ?.copyWith(fontWeight: FontWeight.w700)
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          _labelMode(current.transportMode),
-                          style: Theme.of(context).textTheme.bodyMedium,
+                          labelMode(current.transportMode),
+                          style: Theme.of(context).textTheme.bodyMedium
                         ),
                         const SizedBox(height: 16),
                         FilledButton.icon(
-                          onPressed: () => _runAction(
+                          onPressed: () => runAction(
                             context,
                             ref,
                             isAlighting
@@ -143,25 +143,25 @@ class ActiveTransitPage extends ConsumerWidget {
                                         activeTransitControllerProvider
                                             .notifier,
                                       )
-                                      .boardSegment(current.id),
+                                      .boardSegment(current.id)
                           ),
                           icon: Icon(
                             isAlighting
                                 ? Icons.flag_outlined
                                 : AppColors.transportModeIcon(
                                     current.transportMode,
-                                  ),
+                                  )
                           ),
                           label: Text(
                             isAlighting
-                                ? 'Alight ${_labelMode(current.transportMode)}'
-                                : 'Board ${_labelMode(current.transportMode)}',
-                          ),
+                                ? 'Alight ${labelMode(current.transportMode)}'
+                                : 'Board ${labelMode(current.transportMode)}'
+                          )
                         ),
                         if (isAlighting) ...[
                           const SizedBox(height: 8),
                           TextButton.icon(
-                            onPressed: () => _runAction(
+                            onPressed: () => runAction(
                               context,
                               ref,
                               () => ref.read(
@@ -175,22 +175,20 @@ class ActiveTransitPage extends ConsumerWidget {
                         if (isBoarding) ...[
                           const SizedBox(height: 8),
                           TextButton(
-                            onPressed: () => _runAction(
+                            onPressed: () => runAction(
                               context,
                               ref,
-                              () => ref
-                                  .read(
-                                    activeTransitControllerProvider.notifier,
-                                  )
-                                  .skipSegment(current.id),
+                              () => ref.read(
+                                  activeTransitControllerProvider.notifier
+                              ).skipSegment(current.id)
                             ),
-                            child: const Text('Skip this segment'),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
+                            child: const Text('Skip this segment')
+                          )
+                        ]
+                      ]
+                    )
+                  )
+                )
               ] else ...[
                 Card(
                   child: Padding(
@@ -206,7 +204,7 @@ class ActiveTransitPage extends ConsumerWidget {
                         const SizedBox(height: 12),
                         FilledButton.icon(
                           onPressed: () async {
-                            final completed = await _runAction(
+                            final completed = await runAction(
                               context,
                               ref,
                               () => ref
@@ -220,18 +218,18 @@ class ActiveTransitPage extends ConsumerWidget {
                             if (context.mounted) context.go('/logs');
                           },
                           icon: const Icon(Icons.check),
-                          label: const Text('Complete commute'),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                          label: const Text('Complete commute')
+                        )
+                      ]
+                    )
+                  )
+                )
               ],
               const SizedBox(height: 20),
               Text(
                 'Route progress',
                 style: Theme.of(context).textTheme.titleLarge
-                    ?.copyWith(fontWeight: FontWeight.w700),
+                    ?.copyWith(fontWeight: FontWeight.w700)
               ),
               const SizedBox(height: 10),
               Card(
@@ -244,28 +242,28 @@ class ActiveTransitPage extends ConsumerWidget {
                         index < transit.segments.length;
                         index++
                       )
-                        _TimelineRow(
+                        TimelineRow(
                           segment: transit.segments[index],
-                          isLast: index == transit.segments.length - 1,
-                        ),
-                    ],
-                  ),
-                ),
+                          isLast: index == transit.segments.length - 1
+                        )
+                    ]
+                  )
+                )
               ),
               const SizedBox(height: 12),
               TextButton.icon(
                 onPressed: () => context.go('/schedules'),
                 icon: const Icon(Icons.edit_road),
-                label: const Text('View schedules'),
-              ),
-            ],
+                label: const Text('View schedules')
+              )
+            ]
           );
-        },
-      ),
+        }
+      )
     );
   }
 
-  Future<bool> _runAction(
+  Future<bool> runAction(
     BuildContext context,
     WidgetRef ref,
     Future<void> Function() action,
@@ -282,7 +280,7 @@ class ActiveTransitPage extends ConsumerWidget {
     }
   }
 
-  Future<void> _resetCommute(
+  Future<void> resetCommute(
     BuildContext context,
     WidgetRef ref,
     int transitLogId,
@@ -307,7 +305,7 @@ class ActiveTransitPage extends ConsumerWidget {
       )
     );
     if (confirmed != true || !context.mounted) return;
-    await _runAction(
+    await runAction(
       context,
       ref,
       () => ref.read(activeTransitControllerProvider.notifier)
@@ -315,7 +313,7 @@ class ActiveTransitPage extends ConsumerWidget {
     );
   }
 
-  Future<void> _cancelCommute(
+  Future<void> cancelCommute(
     BuildContext context,
     WidgetRef ref,
     int transitLogId,
@@ -330,17 +328,17 @@ class ActiveTransitPage extends ConsumerWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Keep going'),
+            child: const Text('Keep going')
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Cancel commute'),
-          ),
-        ],
-      ),
+            child: const Text('Cancel commute')
+          )
+        ]
+      )
     );
     if (confirmed != true || !context.mounted) return;
-    await _runAction(
+    await runAction(
       context,
       ref,
       () => ref
@@ -350,15 +348,14 @@ class ActiveTransitPage extends ConsumerWidget {
   }
 }
 
-class _CommuteHeader extends ConsumerWidget {
-  const _CommuteHeader({
-    required this.transitLogId,
+class CommuteHeader extends ConsumerWidget {
+  const CommuteHeader({
+    super.key,
     required this.scheduleId,
     required this.startedAt,
-    required this.segments,
+    required this.segments
   });
 
-  final int transitLogId;
   final int? scheduleId;
   final DateTime startedAt;
   final int segments;
@@ -378,47 +375,24 @@ class _CommuteHeader extends ConsumerWidget {
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.headlineSmall
-              ?.copyWith(fontWeight: FontWeight.w700),
+              ?.copyWith(fontWeight: FontWeight.w700)
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 6),
         Wrap(
           crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 6,
+          spacing: 8,
+          runSpacing: 4,
           children: [
-            InkWell(
-              onTap: () => _adjustCommuteStartTime(
-                context,
-                ref,
-                transitLogId,
-                startedAt
-              ),
-              borderRadius: BorderRadius.circular(4),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Started ${_formatTime(startedAt)}',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.primary,
-                        decoration: TextDecoration.underline,
-                        fontWeight: FontWeight.w600
-                      )
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      Icons.edit,
-                      size: 14,
-                      color: Theme.of(context).colorScheme.primary
-                    )
-                  ]
-                )
-              )
+            TimeBadge(
+              label: 'Started ${formatTime(startedAt)}',
+              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+              foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer
             ),
             Text(
               '· $segments ${segments == 1 ? 'segment' : 'segments'}',
-              style: Theme.of(context).textTheme.bodyMedium
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant
+              )
             )
           ]
         )
@@ -427,7 +401,7 @@ class _CommuteHeader extends ConsumerWidget {
   }
 }
 
-Future<void> _adjustCommuteStartTime(
+Future<void> adjustCommuteStartTime(
   BuildContext context,
   WidgetRef ref,
   int transitLogId,
@@ -461,8 +435,9 @@ Future<void> _adjustCommuteStartTime(
   }
 }
 
-class _TimelineRow extends ConsumerWidget {
-  const _TimelineRow({
+class TimelineRow extends ConsumerWidget {
+  const TimelineRow({
+    super.key,
     required this.segment,
     required this.isLast
   });
@@ -500,127 +475,138 @@ class _TimelineRow extends ConsumerWidget {
             width: 36,
             child: Column(
               children: [
-                Icon(
-                  isDone
-                      ? Icons.check_circle
-                      : isSkipped
-                      ? Icons.skip_next
-                      : AppColors.transportModeIcon(mode),
-                  color: isSkipped
-                      ? colorScheme.outline
-                      : isDone
-                      ? colorScheme.primary
-                      : modeColor,
+                SizedBox(
+                  height: 24,
+                  child: Center(
+                    child: Icon(
+                      isDone
+                          ? Icons.check_circle
+                          : isSkipped
+                          ? Icons.skip_next
+                          : AppColors.transportModeIcon(mode),
+                      color: isSkipped
+                          ? colorScheme.outline
+                          : isDone
+                          ? colorScheme.primary
+                          : modeColor
+                    )
+                  )
                 ),
                 if (!isLast)
                   Container(
                     height: 36,
                     width: 2,
                     margin: const EdgeInsets.symmetric(vertical: 4),
-                    color: colorScheme.outlineVariant,
-                  ),
-              ],
-            ),
+                    color: colorScheme.outlineVariant
+                  )
+              ]
+            )
           ),
           const SizedBox(width: 8),
           Expanded(
             child: Padding(
-              padding: EdgeInsets.only(bottom: isLast ? 16 : 12, top: 2),
+              padding: EdgeInsets.only(bottom: isLast ? 16 : 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyMedium
-                        ?.copyWith(fontWeight: FontWeight.w600),
+                  SizedBox(
+                    height: 24,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(fontWeight: FontWeight.w600)
+                          )
+                        ),
+                        if (hasMenu)
+                          PopupMenuButton<SegmentAction>(
+                            tooltip: 'Segment options',
+                            padding: EdgeInsets.zero,
+                            child: const Icon(Icons.more_vert, size: 20),
+                            onSelected: (action) {
+                              switch (action) {
+                                case SegmentAction.undoBoard:
+                                  ref
+                                      .read(activeTransitControllerProvider.notifier)
+                                      .undoBoardSegment(segment.id);
+                                  break;
+                                case SegmentAction.resetSegment:
+                                  _confirmResetSegment(context, ref, segment.id);
+                                  break;
+                                case SegmentAction.editBoardTime:
+                                  _adjustTimestamp(
+                                    context: context,
+                                    ref: ref,
+                                    segment: segment,
+                                    isBoard: true
+                                  );
+                                  break;
+                                case SegmentAction.editAlightTime:
+                                  _adjustTimestamp(
+                                    context: context,
+                                    ref: ref,
+                                    segment: segment,
+                                    isBoard: false
+                                  );
+                                  break;
+                              }
+                            },
+                            itemBuilder: (context) => [
+                              if (isInTransit)
+                                const PopupMenuItem(
+                                  value: SegmentAction.undoBoard,
+                                  child: ListTile(
+                                    leading: Icon(Icons.undo),
+                                    title: Text('Undo board'),
+                                    contentPadding: EdgeInsets.zero
+                                  )
+                                ),
+                              if (isDone || isSkipped)
+                                const PopupMenuItem(
+                                  value: SegmentAction.resetSegment,
+                                  child: ListTile(
+                                    leading: Icon(Icons.restart_alt),
+                                    title: Text('Reset segment'),
+                                    contentPadding: EdgeInsets.zero
+                                  )
+                                ),
+                              if (boardedAt != null)
+                                const PopupMenuItem(
+                                  value: SegmentAction.editBoardTime,
+                                  child: ListTile(
+                                    leading: Icon(Icons.access_time),
+                                    title: Text('Adjust board time'),
+                                    contentPadding: EdgeInsets.zero
+                                  )
+                                ),
+                              if (alightedAt != null)
+                                const PopupMenuItem(
+                                  value: SegmentAction.editAlightTime,
+                                  child: ListTile(
+                                    leading: Icon(Icons.access_time_filled),
+                                    title: Text('Adjust alight time'),
+                                    contentPadding: EdgeInsets.zero
+                                  )
+                                )
+                            ]
+                          )
+                      ]
+                    )
                   ),
                   const SizedBox(height: 3),
-                  Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: 6,
-                    runSpacing: 4,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
                         statusText,
                         style: Theme.of(context).textTheme.labelSmall
                             ?.copyWith(color: colorScheme.onSurfaceVariant)
                       ),
-                      if (boardedAt != null)
-                        InkWell(
-                          onTap: () => _adjustTimestamp(
-                            context: context,
-                            ref: ref,
-                            segment: segment,
-                            isBoard: true
-                          ),
-                          borderRadius: BorderRadius.circular(4),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 2,
-                              vertical: 1
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  'Boarded ${_formatTime(boardedAt)}',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .labelSmall
-                                      ?.copyWith(
-                                        color: colorScheme.primary,
-                                        decoration: TextDecoration.underline
-                                      )
-                                ),
-                                const SizedBox(width: 2),
-                                Icon(
-                                  Icons.edit,
-                                  size: 11,
-                                  color: colorScheme.primary
-                                )
-                              ]
-                            )
-                          )
-                        ),
-                      if (alightedAt != null)
-                        InkWell(
-                          onTap: () => _adjustTimestamp(
-                            context: context,
-                            ref: ref,
-                            segment: segment,
-                            isBoard: false
-                          ),
-                          borderRadius: BorderRadius.circular(4),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 2,
-                              vertical: 1
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  'Alighted ${_formatTime(alightedAt)}',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .labelSmall
-                                      ?.copyWith(
-                                        color: colorScheme.primary,
-                                        decoration: TextDecoration.underline
-                                      )
-                                ),
-                                const SizedBox(width: 2),
-                                Icon(
-                                  Icons.edit,
-                                  size: 11,
-                                  color: colorScheme.primary
-                                )
-                              ]
-                            )
-                          )
-                        ),
                       if (segment.actualDurationMinutes != null)
                         Text(
                           '${segment.actualDurationMinutes} min',
@@ -628,83 +614,17 @@ class _TimelineRow extends ConsumerWidget {
                               ?.copyWith(color: colorScheme.onSurfaceVariant)
                         )
                     ]
-                  )
+                  ),
+                  if (boardedAt != null || alightedAt != null) ...[
+                    const SizedBox(height: 6),
+                    TimeBadge(
+                      label: formatBoardAlight(boardedAt, alightedAt)
+                    )
+                  ]
                 ]
               )
             )
-          ),
-          if (hasMenu)
-            PopupMenuButton<SegmentAction>(
-              icon: const Icon(Icons.more_horiz, size: 20),
-              tooltip: 'Segment options',
-              padding: EdgeInsets.zero,
-              onSelected: (action) {
-                switch (action) {
-                  case SegmentAction.undoBoard:
-                    ref
-                        .read(activeTransitControllerProvider.notifier)
-                        .undoBoardSegment(segment.id);
-                    break;
-                  case SegmentAction.resetSegment:
-                    _confirmResetSegment(context, ref, segment.id);
-                    break;
-                  case SegmentAction.editBoardTime:
-                    _adjustTimestamp(
-                      context: context,
-                      ref: ref,
-                      segment: segment,
-                      isBoard: true
-                    );
-                    break;
-                  case SegmentAction.editAlightTime:
-                    _adjustTimestamp(
-                      context: context,
-                      ref: ref,
-                      segment: segment,
-                      isBoard: false
-                    );
-                    break;
-                }
-              },
-              itemBuilder: (context) => [
-                if (isInTransit)
-                  const PopupMenuItem(
-                    value: SegmentAction.undoBoard,
-                    child: ListTile(
-                      leading: Icon(Icons.undo),
-                      title: Text('Undo board'),
-                      contentPadding: EdgeInsets.zero
-                    )
-                  ),
-                if (isDone || isSkipped)
-                  const PopupMenuItem(
-                    value: SegmentAction.resetSegment,
-                    child: ListTile(
-                      leading: Icon(Icons.restart_alt),
-                      title: Text('Reset segment'),
-                      contentPadding: EdgeInsets.zero
-                    )
-                  ),
-                if (boardedAt != null)
-                  const PopupMenuItem(
-                    value: SegmentAction.editBoardTime,
-                    child: ListTile(
-                      leading: Icon(Icons.access_time),
-                      title: Text('Adjust board time'),
-                      contentPadding: EdgeInsets.zero
-                    )
-                  ),
-                if (alightedAt != null)
-                  const PopupMenuItem(
-                    value: SegmentAction.editAlightTime,
-                    child: ListTile(
-                      leading: Icon(Icons.access_time_filled),
-                      title: Text('Adjust alight time'),
-                      contentPadding: EdgeInsets.zero
-                    )
-                  )
-              ]
-            )
+          )
         ]
       )
     );
@@ -790,8 +710,8 @@ class _TimelineRow extends ConsumerWidget {
   }
 }
 
-class _NoActiveCommute extends StatelessWidget {
-  const _NoActiveCommute();
+class NoActiveCommute extends StatelessWidget {
+  const NoActiveCommute({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -821,8 +741,8 @@ class _NoActiveCommute extends StatelessWidget {
   }
 }
 
-class _ErrorState extends StatelessWidget {
-  const _ErrorState({required this.message});
+class ErrorState extends StatelessWidget {
+  const ErrorState({super.key, required this.message});
 
   final String message;
 
@@ -837,15 +757,26 @@ class _ErrorState extends StatelessWidget {
   }
 }
 
-String _labelMode(String mode) {
+String labelMode(String mode) {
   if (mode.isEmpty) return 'Transit';
   return '${mode[0].toUpperCase()}${mode.substring(1)}';
 }
 
-String _formatTime(DateTime time) {
+String formatTime(DateTime time) {
   final local = time.toLocal();
   final hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
   final minute = local.minute.toString().padLeft(2, '0');
   final period = local.hour < 12 ? 'AM' : 'PM';
   return '$hour:$minute $period';
+}
+
+String formatBoardAlight(DateTime? boardedAt, DateTime? alightedAt) {
+  if (boardedAt != null && alightedAt != null) {
+    return 'Boarded ${formatTime(boardedAt)} · Alighted ${formatTime(alightedAt)}';
+  } else if (boardedAt != null) {
+    return 'Boarded ${formatTime(boardedAt)}';
+  } else if (alightedAt != null) {
+    return 'Alighted ${formatTime(alightedAt)}';
+  }
+  return '';
 }
