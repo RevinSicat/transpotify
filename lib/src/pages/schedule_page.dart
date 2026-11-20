@@ -33,11 +33,14 @@ class SchedulePage extends ConsumerWidget {
             separatorBuilder: (_, _) => const SizedBox(height: 12),
             itemBuilder: (context, index) {
               final item = items[index];
+              final activeLog = activeTransit.asData?.value?.log;
               return _ScheduleManagementCard(
                 schedule: item,
                 isCurrentCommute:
-                    activeTransit.asData?.value?.log.scheduleId ==
+                    activeLog?.scheduleId ==
                     item.schedule.id,
+                hasOtherActiveCommute: activeLog != null &&
+                    activeLog.scheduleId != item.schedule.id,
                 onCommutePressed: () async {
                   final active = activeTransit.asData?.value;
                   if (active != null) {
@@ -158,12 +161,14 @@ class _ScheduleManagementCard extends ConsumerWidget {
   const _ScheduleManagementCard({
     required this.schedule,
     required this.isCurrentCommute,
+    required this.hasOtherActiveCommute,
     required this.onCommutePressed,
     required this.onActionSelected,
   });
 
   final ScheduleWithSegments schedule;
   final bool isCurrentCommute;
+  final bool hasOtherActiveCommute;
   final VoidCallback onCommutePressed;
   final ValueChanged<ScheduleCardAction> onActionSelected;
 
@@ -187,6 +192,7 @@ class _ScheduleManagementCard extends ConsumerWidget {
         schedule: schedule,
         variance: value,
         isCurrentCommute: isCurrentCommute,
+        hasOtherActiveCommute: hasOtherActiveCommute,
         onCommutePressed: (_) => onCommutePressed(),
         onActionSelected: onActionSelected,
       ),
