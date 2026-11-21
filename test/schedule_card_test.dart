@@ -53,9 +53,29 @@ void main() {
     );
 
     expect(find.text('Active'), findsOneWidget);
+    expect(
+      find.text('A very long weekday commute schedule title'),
+      findsOneWidget,
+    );
+    final title = tester.widget<Text>(
+      find.text('A very long weekday commute schedule title'),
+    );
+    expect(title.maxLines, 1);
+    expect(title.overflow, TextOverflow.ellipsis);
+
     expect(find.text('Avg. 42 min'), findsOneWidget);
     expect(find.text('18 mins less than expected time'), findsOneWidget);
-    expect(find.text('8:00 AM  →  9:00 AM'), findsOneWidget);
+    expect(find.byIcon(Icons.schedule), findsOneWidget);
+    expect(find.text('8:00 AM'), findsOneWidget);
+    expect(find.byIcon(Icons.arrow_forward), findsOneWidget);
+    expect(find.text('9:00 AM'), findsOneWidget);
+
+    final startCenter = tester.getCenter(find.text('8:00 AM')).dy;
+    final arrowCenter = tester.getCenter(find.byIcon(Icons.arrow_forward)).dy;
+    final endCenter = tester.getCenter(find.text('9:00 AM')).dy;
+    expect(arrowCenter, closeTo(startCenter, 1.0));
+    expect(endCenter, closeTo(startCenter, 1.0));
+
     expect(find.text('Mn'), findsOneWidget);
     expect(find.text('Tu'), findsOneWidget);
     expect(find.text('Wd'), findsOneWidget);
@@ -100,12 +120,6 @@ void main() {
       (unscheduledDayBadge.decoration! as BoxDecoration).color,
       theme.colorScheme.surfaceContainerHighest,
     );
-
-    final title = tester.widget<Text>(
-      find.text('A very long weekday commute schedule title'),
-    );
-    expect(title.maxLines, 1);
-    expect(title.overflow, TextOverflow.ellipsis);
 
     await tester.tap(find.text('Start Commute'));
     expect(commutePressed, isTrue);
@@ -157,5 +171,88 @@ void main() {
     expect(find.text('Inactive'), findsOneWidget);
     await tester.tap(find.text('Resume Active Commute'));
     expect(commutePressed, isTrue);
+  });
+
+  testWidgets(
+    'button is greyed out (disabled) when there is another active commute',
+    (tester) async {
+      final scheduleId = await database.scheduleDao.createScheduleWithSegments(
+        SchedulesCompanion.insert(
+          name: 'Another commute',
+          targetStartTime: '08:00',
+          targetArrivalTime: '09:00',
+          daysOfWeek: const [1],
+          isActive: const Value(true),
+        ),
+        [],
+      );
+      final schedule = await database.scheduleDao.getScheduleWithSegments(
+        scheduleId,
+      );
+      var commutePressed = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ScheduleCard(
+              schedule: schedule!,
+              variance: const DurationVariance(
+                expectedMinutes: 60,
+                averageMinutes: null,
+                sampleCount: 0,
+              ),
+              isCurrentCommute: false,
+              hasOtherActiveCommute: true,
+              onCommutePressed: (id) => commutePressed = true,
+              onActionSelected: (_) {},
+            ),
+          ),
+        ),
+      );
+
+      final button = tester.widget<FilledButton>(find.byType(FilledButton));
+      expect(button.onPressed, isNull);
+      await tester.tap(find.text('Start Commute'));
+      expect(commutePressed, isFalse);
+    },
+  );
+
+  testWidgets('measure ScheduleCard size', (tester) async {
+    final scheduleId = await database.scheduleDao.createScheduleWithSegments(
+      SchedulesCompanion.insert(
+        name: 'Weekday commute',
+        targetStartTime: '08:00',
+        targetArrivalTime: '09:00',
+        daysOfWeek: const [1, 2, 3, 4, 5],
+        isActive: const Value(true),
+      ),
+      [],
+    );
+    final schedule = await database.scheduleDao.getScheduleWithSegments(
+      scheduleId,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: ScheduleCard(
+              schedule: schedule!,
+              variance: const DurationVariance(
+                expectedMinutes: 60,
+                averageMinutes: 45,
+                sampleCount: 5,
+              ),
+              onCommutePressed: (_) {},
+              onActionSelected: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final cardSize = tester.getSize(find.byType(Card));
+    expect(cardSize.height, lessThan(310));
+    expect(cardSize.height, greaterThan(270));
   });
 }

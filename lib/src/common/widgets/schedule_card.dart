@@ -12,12 +12,14 @@ class ScheduleCard extends StatelessWidget {
     required this.onCommutePressed,
     required this.onActionSelected,
     this.isCurrentCommute = false,
+    this.hasOtherActiveCommute = false,
     super.key,
   });
 
   final ScheduleWithSegments schedule;
   final DurationVariance variance;
   final bool isCurrentCommute;
+  final bool hasOtherActiveCommute;
   final ValueChanged<int> onCommutePressed;
   final ValueChanged<ScheduleCardAction> onActionSelected;
 
@@ -26,12 +28,18 @@ class ScheduleCard extends StatelessWidget {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
     final data = schedule.schedule;
+    final average = variance.averageMinutes;
+    final averageText = average == null
+        ? 'No average yet'
+        : 'Avg. ${formatDuration(average.round())}';
+    final varianceText = variance.summary;
 
     return Card(
       clipBehavior: Clip.antiAlias,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Row 1: Active badge, Schedule card menu
@@ -71,38 +79,73 @@ class ScheduleCard extends StatelessWidget {
               ]
             ),
             const SizedBox(height: 8),
-            // Row 2: Schedule title, Commute summary
+            // Row 2: Schedule name
             Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Schedule title
                 Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.only(right: 12, top: 2),
+                  child: Text(
+                    data.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700
+                    )
+                  )
+                )
+              ]
+            ),
+            const SizedBox(height: 8),
+            // Row 3: Average time, Variance / Early-late summary
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  averageText,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700
+                  )
+                ),
+                Flexible(
+                  child: Tooltip(
+                    message: varianceText,
                     child: Text(
-                      data.name,
+                      varianceText,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w700
+                      textAlign: TextAlign.end,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: average == null
+                            ? colors.onSurfaceVariant
+                            : colors.primary,
+                        fontWeight: FontWeight.w600
                       )
                     )
                   )
-                ),
-                // Commute summary
-                CommuteSummary(variance: variance)
+                )
               ]
             ),
-            const SizedBox(height: 16),
-            // Row 3: Schedule start and end time
+            const SizedBox(height: 12),
+            // Row 4: Schedule start and end time with vertically centered arrow
             Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Schedule start and end time
                 Icon(Icons.schedule, size: 18, color: colors.primary),
                 const SizedBox(width: 8),
                 Text(
-                  '${formatTime(data.targetStartTime)}  →  '
-                  '${formatTime(data.targetArrivalTime)}',
+                  formatTime(data.targetStartTime),
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.w600
+                  )
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  Icons.arrow_forward,
+                  size: 16,
+                  color: colors.onSurfaceVariant
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  formatTime(data.targetArrivalTime),
                   style: theme.textTheme.bodyLarge?.copyWith(
                     fontWeight: FontWeight.w600
                   )
@@ -110,7 +153,7 @@ class ScheduleCard extends StatelessWidget {
               ]
             ),
             const SizedBox(height: 12),
-            // Row 4: Schedule day labels
+            // Row 5: Schedule day labels
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               // Schedule for each day labels
@@ -119,14 +162,15 @@ class ScheduleCard extends StatelessWidget {
                     (day) => DayBadge(
                       label: day.label,
                       isScheduled: day.isScheduled
-                    ),
+                    )
                   )
                   .toList()
             ),
-            const SizedBox(height: 8),
-            // Row 5: Schedule Action Button
+            const SizedBox(height: 12),
+            // Row 6: Schedule Action Button
             FilledButton.icon(
-              onPressed: data.isActive || isCurrentCommute
+              onPressed: !hasOtherActiveCommute &&
+                      (data.isActive || isCurrentCommute)
                   ? () => onCommutePressed(data.id)
                   : null,
               icon: Icon(
@@ -140,6 +184,14 @@ class ScheduleCard extends StatelessWidget {
         )
       )
     );
+  }
+
+  static String formatDuration(int minutes) {
+    final hours = minutes ~/ 60;
+    final remainingMinutes = minutes % 60;
+    if (hours == 0) return '$remainingMinutes min';
+    if (remainingMinutes == 0) return '${hours}h';
+    return '${hours}h ${remainingMinutes}m';
   }
 
   static String formatTime(String time) {
@@ -268,12 +320,12 @@ class DayBadge extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return Container(
       constraints: const BoxConstraints(minWidth: 32),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: isScheduled
             ? colors.primaryContainer
             : colors.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12)
+        borderRadius: BorderRadius.circular(10)
       ),
       alignment: Alignment.center,
       child: Text(
