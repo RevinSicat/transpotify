@@ -126,6 +126,17 @@ class TransitDao extends DatabaseAccessor<AppDatabase> with _$TransitDaoMixin {
     return logs.map((l) => l.totalDurationMinutes!).toList();
   }
 
+  Stream<List<int>> watchCompletedDurations(int scheduleId) {
+    final query = select(transitLogs)
+      ..where((transitLogs) =>
+      transitLogs.scheduleId.equals(scheduleId) &
+      transitLogs.status.equals(TransitLogStatus.completed) &
+      transitLogs.totalDurationMinutes.isNotNull());
+    return query
+        .watch()
+        .map((logs) => logs.map((l) => l.totalDurationMinutes!).toList());
+  }
+
   // --------------------------------------------------------------------------- Segment logs
 
   Future<List<TransitSegmentLog>> getSegmentLogsForLog(int transitLogId) {
