@@ -103,7 +103,13 @@ class ScheduleDao extends DatabaseAccessor<AppDatabase>
   }
 
   Future<Schedule?> getScheduleById(int id) {
-    return (select(schedules)..where((s) => s.id.equals(id))).getSingleOrNull();
+    return (select(schedules)..where((s) => s.id.equals(id)))
+        .getSingleOrNull();
+  }
+
+  Stream<Schedule?> watchScheduleById(int id) {
+    return (select(schedules)..where((s) => s.id.equals(id)))
+        .watchSingleOrNull();
   }
 
   Stream<Schedule?> watchScheduleById(int id) {
@@ -193,6 +199,39 @@ class ScheduleDao extends DatabaseAccessor<AppDatabase>
           ),
         )
         .toList();
+  }
+
+  Stream<List<SegmentAverage>> watchSegmentAverages(int scheduleId) {
+    final avgMinutes = transitSegmentLogs.actualDurationMinutes.avg();
+    final samples = transitSegmentLogs.id.count();
+
+    final query =
+        select(scheduleSegments).join([
+            leftOuterJoin(
+              transitSegmentLogs,
+              transitSegmentLogs.scheduleSegmentId.equalsExp(
+                    scheduleSegments.id,
+                  ) &
+                  transitSegmentLogs.status.equals(SegmentLogStatus.completed) &
+                  transitSegmentLogs.actualDurationMinutes.isNotNull()
+            )
+          ])
+          ..addColumns([avgMinutes, samples])
+          ..where(scheduleSegments.scheduleId.equals(scheduleId))
+          ..groupBy([scheduleSegments.id])
+          ..orderBy([OrderingTerm.asc(scheduleSegments.orderIndex)]);
+
+    return query.watch().map(
+          (rows) => rows
+              .map(
+                (row) => SegmentAverage(
+                  segment: row.readTable(scheduleSegments),
+                  averageMinutes: row.read(avgMinutes),
+                  sampleCount: row.read(samples) ?? 0
+                )
+              )
+              .toList(),
+        );
   }
 
   Future<double> getPredictedTotalMinutes(int scheduleId) async {

@@ -80,8 +80,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                 ),
                 const SizedBox(height: 16),
                 SizedBox(
-                  height: 300,
+                  height: 310,
                   child: PageView.builder(
+                    clipBehavior: Clip.none,
                     controller: _pageController,
                     itemCount: items.length,
                     onPageChanged: (value) {
@@ -90,11 +91,13 @@ class _HomePageState extends ConsumerState<HomePage> {
                     itemBuilder: (context, cardIndex) {
                       final item = items[cardIndex];
                       return Padding(
-                        padding: const EdgeInsets.only(right: 10),
+                        padding: const EdgeInsets.only(right: 10, bottom: 4),
                         child: _HomeScheduleCard(
                           schedule: item,
                           isCurrentCommute:
                               activeLog?.scheduleId == item.schedule.id,
+                          hasOtherActiveCommute: activeLog != null &&
+                              activeLog.scheduleId != item.schedule.id,
                           onCommutePressed: () =>
                               _startOrResume(item.schedule.id, activeLog?.id),
                         ),
@@ -183,11 +186,13 @@ class _HomeScheduleCard extends ConsumerWidget {
   const _HomeScheduleCard({
     required this.schedule,
     required this.isCurrentCommute,
+    required this.hasOtherActiveCommute,
     required this.onCommutePressed,
   });
 
   final ScheduleWithSegments schedule;
   final bool isCurrentCommute;
+  final bool hasOtherActiveCommute;
   final VoidCallback onCommutePressed;
 
   @override
@@ -208,6 +213,7 @@ class _HomeScheduleCard extends ConsumerWidget {
         schedule: schedule,
         variance: value,
         isCurrentCommute: isCurrentCommute,
+        hasOtherActiveCommute: hasOtherActiveCommute,
         onCommutePressed: (_) => onCommutePressed(),
         onActionSelected: (action) => _handleAction(context, ref, action),
       ),
