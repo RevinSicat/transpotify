@@ -81,6 +81,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Transpotify'), findsOneWidget);
+    expect(find.text('No average yet'), findsOneWidget);
     expect(find.text('Start Commute'), findsOneWidget);
     await tester.tap(find.text('Start Commute'));
     await tester.pumpAndSettle();
@@ -105,6 +106,15 @@ void main() {
     expect(logs, hasLength(1));
     expect(logs.single.scheduleId, scheduleId);
     expect(logs.single.status, 'completed');
+
+    // Navigate back to Home and verify the schedule summary is updated
+    await tester.tap(find.text('Home'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Transpotify'), findsOneWidget);
+    expect(find.text('No average yet'), findsNothing);
+    expect(find.textContaining('Avg. '), findsOneWidget);
+    expect(find.text('1'), findsOneWidget); // Completed trips: 1
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));
   });

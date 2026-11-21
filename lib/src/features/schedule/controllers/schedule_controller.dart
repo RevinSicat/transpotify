@@ -11,33 +11,36 @@ final schedulesProvider = StreamProvider<List<ScheduleWithSegments>>(
   (ref) => ref.watch(scheduleDaoProvider).watchSchedulesWithSegments(),
 );
 
+final scheduleByIdProvider = StreamProvider.family<Schedule?, int>(
+  (ref, scheduleId) => ref.watch(scheduleDaoProvider)
+      .watchScheduleById(scheduleId),
+);
+
+final completedDurationsProvider = StreamProvider.family<List<int>, int>(
+  (ref, scheduleId) => ref.watch(transitDaoProvider)
+      .watchCompletedDurations(scheduleId),
+);
+
 final scheduleVarianceProvider = FutureProvider.family<DurationVariance, int>((
   ref,
   scheduleId,
 ) async {
-  final scheduleDao = ref.watch(scheduleDaoProvider);
-  final transitDao = ref.watch(transitDaoProvider);
-  final schedule = await scheduleDao.getScheduleById(scheduleId);
+  final schedule = await ref.watch(scheduleByIdProvider(scheduleId).future);
   if (schedule == null) {
     throw StateError('Schedule $scheduleId not found');
   }
+  final completedDurations = await ref.watch(completedDurationsProvider(scheduleId).future);
 
   return CommonUtilities.computeVariance(
     targetStartTime: schedule.targetStartTime,
     targetArrivalTime: schedule.targetArrivalTime,
-    completedDurations: await transitDao.getCompletedDurations(scheduleId),
+    completedDurations: completedDurations
   );
 });
 
-final segmentAveragesProvider =
-    FutureProvider.family<List<SegmentAverage>, int>(
-      (ref, scheduleId) =>
-          ref.watch(scheduleDaoProvider).getSegmentAverages(scheduleId),
-    );
-
-final scheduleByIdProvider = FutureProvider.family<Schedule?, int>(
-  (ref, scheduleId) =>
-      ref.watch(scheduleDaoProvider).getScheduleById(scheduleId),
+final segmentAveragesProvider = StreamProvider.family<List<SegmentAverage>, int>(
+  (ref, scheduleId) => ref.watch(scheduleDaoProvider)
+    .watchSegmentAverages(scheduleId)
 );
 
 final scheduleControllerProvider =
