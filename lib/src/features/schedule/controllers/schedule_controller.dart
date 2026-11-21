@@ -38,9 +38,15 @@ final scheduleVarianceProvider = FutureProvider.family<DurationVariance, int>((
   );
 });
 
-final segmentAveragesProvider = StreamProvider.family<List<SegmentAverage>, int>(
-  (ref, scheduleId) => ref.watch(scheduleDaoProvider)
-    .watchSegmentAverages(scheduleId)
+final segmentAveragesProvider =
+    FutureProvider.family<List<SegmentAverage>, int>(
+      (ref, scheduleId) =>
+          ref.watch(scheduleDaoProvider).getSegmentAverages(scheduleId),
+    );
+
+final scheduleByIdProvider = StreamProvider.family<Schedule?, int>(
+  (ref, scheduleId) =>
+      ref.watch(scheduleDaoProvider).watchScheduleById(scheduleId),
 );
 
 final scheduleControllerProvider =

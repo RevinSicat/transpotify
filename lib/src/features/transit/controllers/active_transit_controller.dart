@@ -45,8 +45,48 @@ class ActiveTransitController extends AsyncNotifier<void> {
       _run(() => ref.read(transitDaoProvider).alightSegment(segmentLogId));
 
   /// Marks the commute completed (`endedAt` = completion time).
-  Future<void> completeCommute(int transitLogId) =>
-      _run(() => ref.read(transitDaoProvider).completeCommute(transitLogId));
+  Future<void> completeCommute(int transitLogId) => _run(
+    () => ref.read(transitDaoProvider)
+        .completeCommute(transitLogId)
+  );
+
+  /// Manually adjusts the commute startedAt timestamp.
+  Future<void> updateCommuteStartedAt(int transitLogId, DateTime startedAt) => _run(
+    () => ref.read(transitDaoProvider)
+        .updateCommuteStartedAt(transitLogId, startedAt)
+  );
+
+  /// Undoes a premature board action on an in-transit segment, reverting to pending.
+  Future<void> undoBoardSegment(int segmentLogId) => _run(
+    () => ref.read(transitDaoProvider)
+        .undoBoardSegment(segmentLogId)
+  );
+
+  /// Resets a segment back to pending, clearing its timestamps and actual duration.
+  Future<void> resetSegment(int segmentLogId) => _run(
+    () => ref.read(transitDaoProvider)
+        .resetSegment(segmentLogId)
+  );
+
+  /// Resets all segments in the active commute back to pending while keeping the commute active.
+  Future<void> resetCommute(int transitLogId) => _run(
+    () => ref.read(transitDaoProvider)
+        .resetCommute(transitLogId)
+  );
+
+  /// Manually adjusts boardedAt and/or alightedAt and recalculates actual duration.
+  Future<void> updateSegmentTimestamps(
+    int segmentLogId, {
+    DateTime? boardedAt,
+    DateTime? alightedAt
+  }) => _run(
+  () => ref.read(transitDaoProvider)
+      .updateSegmentTimestamps(
+        segmentLogId,
+        boardedAt: boardedAt,
+        alightedAt: alightedAt
+      )
+  );
 
   // Extras beyond the spec, needed so a missed tap can't trap the user:
   Future<void> skipSegment(int segmentLogId) =>
