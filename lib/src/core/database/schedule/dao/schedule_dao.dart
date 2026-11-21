@@ -112,11 +112,6 @@ class ScheduleDao extends DatabaseAccessor<AppDatabase>
         .watchSingleOrNull();
   }
 
-  Stream<Schedule?> watchScheduleById(int id) {
-    return (select(schedules)..where((s) => s.id.equals(id)))
-        .watchSingleOrNull();
-  }
-
   Future<List<ScheduleSegment>> getSegmentsForSchedule(int scheduleId) {
     return (select(scheduleSegments)
           ..where((s) => s.scheduleId.equals(scheduleId))

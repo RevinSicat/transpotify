@@ -44,11 +44,6 @@ final segmentAveragesProvider =
           ref.watch(scheduleDaoProvider).getSegmentAverages(scheduleId),
     );
 
-final scheduleByIdProvider = StreamProvider.family<Schedule?, int>(
-  (ref, scheduleId) =>
-      ref.watch(scheduleDaoProvider).watchScheduleById(scheduleId),
-);
-
 final scheduleControllerProvider =
     AsyncNotifierProvider<ScheduleController, void>(ScheduleController.new);
 
