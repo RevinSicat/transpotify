@@ -2,6 +2,7 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:transpotify/src/common/widgets/schedule_card.dart';
 import 'package:transpotify/src/core/database/database.dart';
 import 'package:transpotify/src/core/database/database_providers.dart';
 import 'package:transpotify/src/core/navigation/app_router.dart';
@@ -46,7 +47,7 @@ void main() {
     );
     expect(route!.segments, hasLength(1));
     expect(route.segments.single.name, 'Walk to station');
-    expect(find.text('Weekday commute'), findsOneWidget);
+    expect(find.byType(ScheduleCard), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));
